@@ -1,55 +1,27 @@
 # main.py
-from scripts.domain import parse_domain
-from scripts.problem import parse_problem
-from scripts.solver import build_and_solve
+import argparse
 
-domain_str = r"""
-(define (domain pickplace)
-  (:predicates
-    (at ?r ?room)
-    (belong_in ?cup ?room)
-    (handempty ?r)
-    (holding ?r)
-  )
+from scripts.solver import StripsMILPPlanner
 
-  (:action pick
-    :parameters (?r ?room ?cup)
-    :precondition (and (at ?r ?room) (handempty ?r) (belong_in ?cup ?room))
-    :effect (and (holding ?r) (not (handempty ?r)) (not (belong_in ?cup ?room)))
-  )
+def read_file(path: str) -> str:
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
 
-  (:action place
-    :parameters (?r ?room ?cup)
-    :precondition (and (at ?r ?room) (holding ?r))
-    :effect (and (belong_in ?cup ?room) (handempty ?r) (not (holding ?r)))
-  )
+def main():
+    parser = argparse.ArgumentParser(description="STRIPS PDDL → MILP Planner (PuLP)")
+    # 요청대로 --o (domain), --i (problem) 지원
+    parser.add_argument("--o", "--domain", dest="domain_path", required=True, help="PDDL domain file path")
+    parser.add_argument("--i", "--problem", dest="problem_path", required=True, help="PDDL problem file path")
+    parser.add_argument("--H", "--horizon", dest="horizon", type=int, default=3, help="Plan horizon (time steps)")
+    parser.add_argument("--quiet", action="store_true", help="Suppress verbose output")
+    args = parser.parse_args()
 
-  (:action move
-    :parameters (?r ?from ?to)
-    :precondition (and (at ?r ?from))
-    :effect (and (at ?r ?to) (not (at ?r ?from)))
-  )
-)
-"""
+    domain_text = read_file(args.domain_path)
+    problem_text = read_file(args.problem_path)
 
-problem_str = r"""
-(define (problem pp1)
-  (:domain pickplace)
-  (:objects robot room1 room2 cup1)
-  (:init
-    (at robot room1)
-    (belong_in cup1 room1)
-    (handempty robot)
-    (not (holding robot))
-  )
-  (:goal (and
-    (belong_in cup1 room2)
-  ))
-)
-"""
+    planner = StripsMILPPlanner(domain_text, problem_text)
+    planner.build_model(horizon=args.horizon)
+    planner.solve(verbose=not args.quiet)
 
 if __name__ == "__main__":
-    dom = parse_domain(domain_str)
-    prob = parse_problem(problem_str)
-    # 수평선 H=3 (pick -> move -> place)
-    build_and_solve(dom, prob, horizon=3, verbose=True)
+    main()
